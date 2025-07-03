@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Métadonnées et styles -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>Channel Synthesizer</title>
+    <style>
+        /* Styles pour un thème sombre avec dégradé */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #6a4c93, #ff6f61, #f5d1b0);
+            background-size: 300% 300%;
+            animation: gradientAnimation 10s ease infinite;
+            color: #e0e0e0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow-y: auto;
+        }
+
+        @keyframes gradientAnimation {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .m3-container {
+            width: 90%; /* Augmente la largeur */
+            max-width: 1200px; /* Largeur maximale plus grande */
+            padding: 20px;
+            background-color: rgba(30, 30, 30, 0.8);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            position: relative;
+            max-height: 95vh; /* Hauteur maximale augmentée */
+            overflow-y: auto;
+        }
+
+        .m3-title {
+            font-size: 2rem; /* Taille de police augmentée */
+            margin-bottom: 20px;
+            color: #ffcbf2;
+            text-align: center;
+        }
+
+        .logout-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: #bb86fc;
+            color: #121212;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .logout-button:hover {
+            background-color: #985eff;
+        }
+
+        .m3-input-field {
+            margin-bottom: 20px;
+        }
+
+        .m3-input-field label {
+            display: block;
+            margin-bottom: 5px;
+            color: #e0e0e0;
+        }
+
+        .m3-input-field input,
+        .m3-input-field select {
+            width: 100%;
+            padding: 12px; /* Augmente l'espacement */
+            border: 1px solid #333;
+            border-radius: 8px;
+            font-size: 1.1rem; /* Police légèrement plus grande */
+            background-color: #2c2c2c;
+            color: #e0e0e0;
+        }
+
+        .m3-input-field input:focus,
+        .m3-input-field select:focus {
+            border-color: #bb86fc;
+            outline: none;
+            background-color: #3c3c3c;
+        }
+
+        .m3-button {
+            display: block;
+            width: 100%;
+            padding: 15px; /* Plus de padding */
+            background-color: #bb86fc;
+            color: #121212;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2rem; /* Texte plus grand */
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .m3-button:hover {
+            background-color: #985eff;
+        }
+
+        .m3-center-align {
+            text-align: center;
+        }
+
+        /* Styles pour les conteneurs défilables */
+        .scrollable-container {
+            max-height: 400px; /* Augmente la hauteur visible */
+            overflow-y: auto;
+            border: 1px solid #333;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: #2c2c2c;
+        }
+
+        /* Styles pour le tableau des fichiers */
+        .file-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .file-table th, .file-table td {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: left;
+            color: #e0e0e0;
+        }
+
+        .file-table th {
+            background-color: #3c3c3c;
+        }
+
+        .file-table tr:nth-child(even) {
+            background-color: #2c2c2c;
+        }
+
+        .file-table tr:hover {
+            background-color: #3c3c3c;
+        }
+
+        .file-table th {
+            text-align: center;
+        }
+
+        .file-table td {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="m3-container">
+        <h3 class="m3-title">Channel Synthesizer</h3>
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <!-- Case à cocher pour activer les offres de Base -->
+            <div class="m3-input-field checkbox-field">
+                <label for="{{ form.include_base_offers.id_for_label }}">Activer les offres de l'opérateur Base</label>
+                {{ form.include_base_offers }}
+            </div>
+            <!-- Champs pour uploader de nouveaux fichiers PDF -->
+            <div class="m3-input-field">
+                {{ form.pdf_files.label_tag }}
+                {{ form.pdf_files }}
+            </div>
+            <!-- Sélection des fichiers PDF existants -->
+            <div class="m3-input-field">
+                <label for="{{ form.existing_pdf_files.id_for_label }}">Sélectionnez des fichiers PDF existants :</label>
+                <div class="scrollable-container">
+                    <table class="file-table" id="pdf-table">
+                        <thead>
+                            <tr>
+                                <th>Nom du fichier</th>
+                                <th>
+                                    <input type="checkbox" id="select-all-checkbox" />
+                                    <label for="select-all-checkbox">Sélectionner tous</label>
+                                </th>
+                                <th>Supprimer</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for checkbox in form.existing_pdf_files %}
+                                <tr>
+                                    <td>{{ checkbox.choice_label }}</td>
+                                    <td>{{ checkbox.tag }}</td>
+                                    <td>
+                                        <button type="button" class="delete-button m3-button m3-button-danger" data-file-id="{{ checkbox.data.value }}">Supprimer</button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Champ pour uploader un nouveau fichier Excel -->
+            <div class="m3-input-field">
+                {{ form.excel_file.label_tag }}
+                {{ form.excel_file }}
+            </div>
+            <!-- Sélection du fichier Excel existant -->
+            <div class="m3-input-field">
+                <label for="{{ form.existing_excel_file.id_for_label }}">Sélectionnez un fichier Excel existant :</label>
+                <div class="scrollable-container">
+                    {{ form.existing_excel_file }}
+                </div>
+            </div>
+            <div class="m3-center-align">
+                <button class="m3-button" type="submit">Upload and Process</button>
+            </div>
+        </form>
+        <!-- Bouton de déconnexion -->
+        <form method="post" action="{% url 'logout' %}" style="display: inline;">
+            {% csrf_token %}
+            <button class="logout-button" type="submit">Logout</button>
+        </form>
+    </div>
+
+    <!-- Ajouter le script JavaScript ici -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Script pour "Sélectionner tous"
+            const selectAllCheckbox = document.getElementById('select-all-checkbox');
+            const table = document.getElementById('pdf-table');
+            const checkboxes = table.querySelectorAll('tbody input[type="checkbox"]');
+
+            selectAllCheckbox.addEventListener('change', function() {
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = selectAllCheckbox.checked;
+                });
+            });
+
+            checkboxes.forEach(function(checkbox) {
+                checkbox.addEventListener('change', function() {
+                    if (!checkbox.checked) {
+                        selectAllCheckbox.checked = false;
+                    } else {
+                        const allChecked = Array.from(checkboxes).every(function(cb) {
+                            return cb.checked;
+                        });
+                        selectAllCheckbox.checked = allChecked;
+                    }
+                });
+            });
+
+            // Script pour la suppression des PDFs
+            const deleteButtons = document.querySelectorAll('.delete-button');
+
+            deleteButtons.forEach(function(button) {
+                button.addEventListener('click', function() {
+                    const pdfId = this.getAttribute('data-file-id');
+                    console.log("pdfId:", pdfId);
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+                    if (confirm('Êtes-vous sûr de vouloir supprimer ce fichier PDF ?')) {
+                        fetch("{% url 'delete_pdf' %}", {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'X-CSRFToken': csrfToken,
+                            },
+                            body: 'pdf_id=' + encodeURIComponent(pdfId),
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Recharger la page
+                                window.location.reload();
+                            } else {
+                                alert('Erreur lors de la suppression du fichier : ' + data.error);
+                            }
+                        })
+                        .catch(error => {
+                            alert('Une erreur est survenue : ' + error);
+                        });
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
