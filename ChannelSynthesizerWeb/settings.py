@@ -88,9 +88,9 @@ WSGI_APPLICATION = 'ChannelSynthesizerWeb.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'sgbd_3',
-        'USER': 'toters',
-        'PASSWORD': '',
+        'NAME': 'channel_db',
+        'USER': 'mehlo',
+        'PASSWORD': 'Password1234',
         'HOST': 'localhost',
         'PORT': '5432',
     }
