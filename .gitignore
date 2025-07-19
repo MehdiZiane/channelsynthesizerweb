@@ -1,0 +1,19 @@
+# Fichier pour les secrets
+.env
+
+# Fichiers de cache Python
+__pycache__/
+*.pyc
+
+# Base de données de développement
+db.sqlite3
+
+# Fichiers uploadés par les utilisateurs (media)
+# C'est une bonne pratique de les ignorer si vous n'avez pas besoin de les versionner
+/media/
+
+# Fichiers statiques collectés
+/staticfiles/
+
+# Fichiers système macOS
+.DS_Store
