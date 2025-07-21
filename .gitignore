@@ -15,5 +15,9 @@ db.sqlite3
 # Fichiers statiques collectés
 /staticfiles/
 
+/extracted_images/
+
+/test_files/
+
 # Fichiers système macOS
 .DS_Store

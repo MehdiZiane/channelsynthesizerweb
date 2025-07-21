@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'pdf_processing',
     'reporting',
     'accounts',
+    'image_processing'
 
 ]
 
