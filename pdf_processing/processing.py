@@ -15,46 +15,48 @@ import re
 
 
 def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=False):
-    pdf_paths = [pdf_instance.file.path for pdf_instance in pdf_instances]
+    pdf_paths = []
+    for instance in pdf_instances:
+        if hasattr(instance, "file") and hasattr(instance.file, "path"):
+            pdf_paths.append(instance.file.path)
+        else:
+            print(f"AVERTISSEMENT : Objet invalide {instance} ignoré.")
 
-    # Définir les chemins de sortie du rapport
+    if not pdf_paths and not include_base_offers:
+        return None
+
     reports_dir = os.path.join(settings.MEDIA_ROOT, "reports")
     os.makedirs(reports_dir, exist_ok=True)
     final_report_path = os.path.join(reports_dir, "consolidated_report.xlsx")
 
-    # --- LA CORRECTION CLÉ EST ICI ---
-    # S'assurer de supprimer l'ancien rapport pour commencer à neuf à chaque fois.
     if os.path.exists(final_report_path):
         os.remove(final_report_path)
-        print(f"Ancien rapport supprimé : {final_report_path}")
-    # --- FIN DE LA CORRECTION ---
 
-    # --- Logique existante : Traiter les PDFs seulement s'il y en a ---
+    all_extracted_data = []
+
     if pdf_paths:
         print("Traitement des fichiers PDF...")
-        input_directory = os.path.dirname(pdf_paths[0])
-
-        temp_dirs = [
-            os.path.join(settings.MEDIA_ROOT, "outputs", "section"),
-            os.path.join(settings.MEDIA_ROOT, "outputs", "text"),
-        ]
-        for temp_dir in temp_dirs:
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-
         channel_grouping_df = pd.read_excel(
             excel_file_path, sheet_name="Content_Channel_Grouping"
         )
 
         for pdf_path in pdf_paths:
-            process_sections(pdf_path)
-            process_pdfs(pdf_path)
+            print(f"--- Démarrage de sections.process pour : {pdf_path} ---")
+            sections_from_pdf = process_sections(pdf_path)
+            if sections_from_pdf:
+                all_extracted_data.append(
+                    {"path": pdf_path, "sections": sections_from_pdf}
+                )
 
-        output_directory = os.path.join(settings.MEDIA_ROOT, "outputs")
-        output_path = os.path.join(output_directory, "xlsx/consolidated_report.xlsx")
-        generated_path = generate_excel_report(output_path, channel_grouping_df)
-        os.replace(generated_path, final_report_path)
-        print(f"Rapport consolidé des PDFs créé à : {final_report_path}")
+        if all_extracted_data:
+            # On passe les VRAIES données extraites à la fonction de génération d'Excel
+            # Note: on passe le chemin final du rapport directement
+            generated_path = generate_excel_report(
+                final_report_path, channel_grouping_df, all_extracted_data
+            )
+
+            if not generated_path or not os.path.exists(generated_path):
+                print("AVERTISSEMENT : Le rapport Excel n'a pas été généré.")
 
     # --- Logique existante : Gérer l'option BASE ---
     if include_base_offers:
@@ -102,6 +104,8 @@ def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=Fa
             print(error_message)
             if os.path.exists(final_report_path):
                 add_error_to_report(final_report_path, error_message)
+
+    return final_report_path
 
 
 def scrape_base_offer(base_url):

@@ -1,142 +1,106 @@
 import os
 import re
+from typing import List
 import fitz
-from django.conf import settings  # Import Django settings
+from dotenv import load_dotenv
+from azure.core.credentials import AzureKeyCredential
+from azure.ai.vision.imageanalysis import ImageAnalysisClient
+from azure.ai.vision.imageanalysis.models import VisualFeatures
 
-def extract_text(pdf_path, min_font_size=8.0):
+# Charger les variables d'environnement pour Azure
+load_dotenv()
+VISION_ENDPOINT = os.getenv("VISION_ENDPOINT")
+VISION_KEY = os.getenv("VISION_KEY")
+
+
+def parse_orange_pdf(pdf_path: str) -> List[List[str]]:
     """
-    extrait le texte d'un fichier pdf en utilisant un taille de police minimal
-    parcourt les pages et récupère les spans de texte qui sont plus grand que la taille spécifié
-    retourne tout le texte extrait sous forme de chaîne de caractères
+    Parse un PDF Orange en utilisant Azure AI Vision pour l'extraction de texte,
+    puis applique une logique de section robuste sur le texte propre.
+    VERSION DÉFINITIVE.
     """
-    document = fitz.open(pdf_path)
-    text = []
+    print("--- Utilisation du parser Orange DÉFINITIF (Azure) ---")
 
-    for i in range(document.page_count):
-        page = document.load_page(i)
-        blocks = page.get_text("dict")["blocks"]
+    if not VISION_ENDPOINT or not VISION_KEY:
+        print("ERREUR CRITIQUE: Clés Azure non configurées.")
+        return []
 
-        for block in blocks:
-            if 'lines' in block:
-                for line in block["lines"]:
-                    for span in line["spans"]:
-                        if span['size'] >= min_font_size:
-                            text.append(span['text'])
+    try:
+        doc = fitz.open(pdf_path)
+    except Exception as e:
+        print(f"Erreur à l'ouverture du PDF : {e}")
+        return []
 
-    return "\n".join(text)
+    client = ImageAnalysisClient(
+        endpoint=VISION_ENDPOINT, credential=AzureKeyCredential(VISION_KEY)
+    )
+    visual_features = [VisualFeatures.READ]
 
-def clean_text(text):
-    """
-    nettoie le texte extrait en supprimant les lignes inutiles ou trop longues
-    ignore les lignes qui sont vide ou contiennent des mots spécifiques
-    """
-    cleaned_lines = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
+    # Étape 1 : Extraire toutes les lignes de texte propre avec Azure
+    azure_lines = []
+    for page_num, page in enumerate(doc):
+        print(f"Analyse de la page {page_num + 1} du PDF via Azure...")
+        pix = page.get_pixmap(dpi=300)
+        image_bytes = pix.tobytes("png")
+
+        try:
+            result = client.analyze(
+                image_data=image_bytes, visual_features=visual_features
+            )
+            if result.read is not None:
+                for line in result.read.blocks[0].lines:
+                    azure_lines.append(line.text.strip())
+        except Exception as e:
+            print(f"Erreur lors de l'appel à Azure pour la page {page_num + 1}: {e}")
+
+    if not azure_lines:
+        print("AVERTISSEMENT : Azure n'a retourné aucun texte.")
+        return []
+
+    # Étape 2 : Analyser la liste de lignes propre pour créer les sections
+    all_sections = []
+    current_section = []
+
+    section_titles_pattern = re.compile(
+        r"Nederlandstalig|Franstalig|Internationaal|Nieuws|Kids|Sport|Muziek|Regionale zenders|"
+        r"Radio|Be tv|Orange Football|VOOSPORT WORLD|\+18|Optie|Zenders",
+        re.IGNORECASE,
+    )
+
+    # Titre par défaut pour les premières chaînes de la page 1
+    current_title = "Offre de base"
+    current_section.append(current_title)
+
+    i = 0
+    while i < len(azure_lines):
+        line = azure_lines[i]
+
+        match = section_titles_pattern.search(line)
+        # Un titre est une ligne courte qui correspond à nos mots-clés
+        if match and len(line.split()) < 4:
+            if len(current_section) > 1:
+                all_sections.append(current_section)
+            current_section = [line]
+            i += 1
             continue
-        if line.lower() == 'app':
-            continue
-        if len(line) > 35:
-            continue
-        if line.startswith("Optie") or line.startswith("(1)"):
-            continue
-        if "je regionale kanaal" in line.lower():  # exclut les lignes qui contiennent "Je regionale kanaal"
-            continue
-        cleaned_lines.append(line)
-    return "\n".join(cleaned_lines)
 
-def determine_region_from_filename(filename):
-    """
-    determine la region a partir du nom du fichier
-    analyse le nom du fichier pour detecter des mots cles de regions
-    renvoie le code de region approprie ou none si aucun mot cle n'est trouve
-    """
-    filename = filename.lower()
-    if re.search(r'flanders|vlaanderen|flamande|flandre', filename, re.IGNORECASE):
-        return 'F'
-    elif re.search(r'brussels|brussel|bruxelles', filename, re.IGNORECASE):
-        return 'B'
-    elif re.search(r'wallonia|wallonie|walloon|wallonië', filename, re.IGNORECASE):
-        return 'W'
-    elif re.search(r'germanophone|german-speaking|german', filename, re.IGNORECASE):
-        return 'G'
-    else:
-        return None
+        # Logique pour assembler "numéro" + "nom de chaîne"
+        # Si la ligne est un numéro et qu'il y a une ligne suivante
+        if line.isdigit() and len(line) < 4 and (i + 1) < len(azure_lines):
+            channel_name = azure_lines[i + 1]
 
-def is_channel_line(line, section_names):
-    """
-    verifie si une ligne represente un nom de chaîne
-    exclut les lignes qui sont des chiffres ou qui correspondent à un nom de section
-    """
-    if line.isdigit():
-        return False
-    if any(line.lower().startswith(section.lower()) for section in section_names):
-        return False
-    return True
+            # On s'assure que la ligne suivante n'est pas aussi un numéro
+            if not channel_name.isdigit():
+                current_section.append(channel_name)
+                i += 2  # On saute les deux lignes qu'on vient de traiter
+                continue
 
-def append_region_code_to_text(text, region_code, section_names):
-    """
-    ajoute le code de region à la fin de chaque ligne qui represente une chaîne
-    remplit les codes de region manquants en se basant sur les lignes adjacentes
-    """
-    if region_code:
-        lines = text.splitlines()
-        processed_lines = []
-        for line in lines:
-            if is_channel_line(line, section_names):
-                if not re.search(r'\b(F|B|W|G)\b$', line):  # si aucun code de région n'est présent
-                    processed_lines.append(f"{line} {region_code}")
-                else:
-                    processed_lines.append(line)
-            else:
-                processed_lines.append(line)
+        i += 1
 
-        # traitement postérieur pour remplir les codes de région manquants
-        for i, line in enumerate(processed_lines):
-            if is_channel_line(line, section_names) and not re.search(r'\b(F|B|W|G)\b$', line):
-                # trouve le dernier code de région valide
-                for j in range(i - 1, -1, -1):
-                    match = re.search(r'\b(F|B|W|G)\b$', processed_lines[j])
-                    if match:
-                        processed_lines[i] = f"{line} {match.group(0)}"
-                        break
+    if len(current_section) > 1:
+        all_sections.append(current_section)
 
-        return "\n".join(processed_lines)
-    return text
-
-def save_as_tsv(text, filename: str) -> None:
-    """
-    sauvegarde le texte nettoyé dans un fichier tsv
-    créer le répertoire de sortie s'il n'existe pas
-    écrit chaque ligne du texte dans le fichier tsv
-    """
-    output_dir = os.path.join(settings.MEDIA_ROOT, 'outputs', 'text')
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    base_name = os.path.basename(filename)
-    base_name_no_ext = os.path.splitext(base_name)[0]
-    new_filename = base_name_no_ext + '_text.tsv'
-    output_path = os.path.join(output_dir, new_filename)
-
-    with open(output_path, 'w', encoding='utf-8') as f:
-        for line in text.splitlines():
-            f.write(line + '\n')
-
-    print(f"Saved TSV to {output_path}")
-
-def parse_orange_pdf(pdf_path, section_names, min_font_size=8.0):
-    """
-    extrait et traite le texte d'un fichier pdf orange
-    nettoie le texte extrait et ajoute les codes de region si necessaire
-    sauvegarde le resultat dans un fichier tsv
-    """
-    print(f"extraction du texte de {pdf_path} avec une taille de police minimum de {min_font_size}")
-    text = extract_text(pdf_path, min_font_size)
-    cleaned_text = clean_text(text)
-
-    region_code = determine_region_from_filename(os.path.basename(pdf_path))
-    text_with_region_code = append_region_code_to_text(cleaned_text, region_code, section_names)
-
-    save_as_tsv(text_with_region_code, pdf_path)
+    print(
+        f"--- Parser Azure DÉFINITIF a trouvé {len(all_sections)} sections valides. ---"
+    )
+    return all_sections
