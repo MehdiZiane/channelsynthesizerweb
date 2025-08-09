@@ -1,64 +1,65 @@
-from .models import UploadedPDF, Channel
-from .parsers.all_sections_parser import detect_provider_and_year
-from .enablers.sections import process as process_sections
-from .enablers.text import process_pdfs
-from .utils import parse_tsv, read_section_names
-from pdf_processing.enablers.excel import generate_excel_report
 import os
-from django.conf import settings
-import pandas as pd
 import shutil
+import pandas as pd
+from django.conf import settings
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 import re
 
+# Les imports depuis l'application
+from .models import UploadedPDF, Channel
+from .enablers.sections import process as process_sections
+from .enablers.text import process_pdfs
+from .enablers.excel import generate_excel_report
+
+# --- LA CORRECTION EST ICI ---
+# On s'assure que toutes les fonctions utilisées de utils.py sont bien importées
+from .utils import get_provider_and_year, create_consolidated_excel, add_error_to_report
+
+# On importe le scraper de BASE qui était manquant
+from .parsers.providers.base import scrape_base_offer
+
 
 def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=False):
+    # --- DÉBUT DE LA LOGIQUE PDF CORRIGÉE ---
     pdf_paths = []
     for instance in pdf_instances:
         if hasattr(instance, "file") and hasattr(instance.file, "path"):
             pdf_paths.append(instance.file.path)
-        else:
-            print(f"AVERTISSEMENT : Objet invalide {instance} ignoré.")
 
     if not pdf_paths and not include_base_offers:
         return None
 
-    reports_dir = os.path.join(settings.MEDIA_ROOT, "reports")
-    os.makedirs(reports_dir, exist_ok=True)
-    final_report_path = os.path.join(reports_dir, "consolidated_report.xlsx")
-
+    final_report_path = os.path.join(
+        settings.MEDIA_ROOT, "reports", "consolidated_report.xlsx"
+    )
     if os.path.exists(final_report_path):
         os.remove(final_report_path)
 
     all_extracted_data = []
-
     if pdf_paths:
-        print("Traitement des fichiers PDF...")
         channel_grouping_df = pd.read_excel(
             excel_file_path, sheet_name="Content_Channel_Grouping"
         )
 
         for pdf_path in pdf_paths:
-            print(f"--- Démarrage de sections.process pour : {pdf_path} ---")
-            sections_from_pdf = process_sections(pdf_path)
-            if sections_from_pdf:
+            provider, _ = get_provider_and_year(os.path.basename(pdf_path))
+            channels_from_pdf = process_sections(
+                pdf_path, provider
+            )  # Appel à sections.py
+            if channels_from_pdf:
                 all_extracted_data.append(
-                    {"path": pdf_path, "sections": sections_from_pdf}
+                    {"path": pdf_path, "channels": channels_from_pdf}
                 )
 
         if all_extracted_data:
-            # On passe les VRAIES données extraites à la fonction de génération d'Excel
-            # Note: on passe le chemin final du rapport directement
-            generated_path = generate_excel_report(
-                final_report_path, channel_grouping_df, all_extracted_data
+            create_consolidated_excel(
+                all_extracted_data, final_report_path, channel_grouping_df
             )
+    # --- FIN DE LA LOGIQUE PDF CORRIGÉE ---
 
-            if not generated_path or not os.path.exists(generated_path):
-                print("AVERTISSEMENT : Le rapport Excel n'a pas été généré.")
-
-    # --- Logique existante : Gérer l'option BASE ---
+    # --- DÉBUT DE LA LOGIQUE BASE RÉINTÉGRÉE ---
     if include_base_offers:
         print("Scraping des offres BASE et ajout au rapport...")
         base_url = "https://www.prd.base.be/en/support/tv/your-base-tv-box-and-remote/what-channels-does-base-offer/"
@@ -70,19 +71,18 @@ def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=Fa
                     "Aucune chaîne n'a été trouvée lors du scraping des offres BASE."
                 )
 
+            # Si le rapport a déjà été créé par la logique PDF, on y ajoute les données.
             if os.path.exists(final_report_path):
-                consolidated_df = pd.read_excel(
-                    final_report_path, sheet_name="Consolidated"
-                )
-                columns_order = consolidated_df.columns.tolist()
-                base_offer_df = base_offer_df.reindex(columns=columns_order)
-
                 with pd.ExcelWriter(
                     final_report_path,
                     engine="openpyxl",
                     mode="a",
                     if_sheet_exists="overlay",
                 ) as writer:
+                    # Lire le DataFrame existant pour obtenir le bon ordre de colonnes
+                    existing_df = pd.read_excel(writer, sheet_name="Consolidated")
+                    base_offer_df = base_offer_df.reindex(columns=existing_df.columns)
+
                     base_offer_df.to_excel(
                         writer,
                         sheet_name="Consolidated",
@@ -92,6 +92,7 @@ def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=Fa
                     )
                 print("Données BASE ajoutées au rapport consolidé existant.")
             else:
+                # Si aucun PDF n'a été traité, on crée le rapport uniquement avec les données de BASE.
                 base_offer_df.to_excel(
                     final_report_path, sheet_name="Consolidated", index=False
                 )
@@ -104,6 +105,7 @@ def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=Fa
             print(error_message)
             if os.path.exists(final_report_path):
                 add_error_to_report(final_report_path, error_message)
+    # --- FIN DE LA LOGIQUE BASE RÉINTÉGRÉE ---
 
     return final_report_path
 
