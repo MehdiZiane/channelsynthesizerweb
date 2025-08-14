@@ -6,10 +6,12 @@ azure-cognitiveservices-vision-customvision==3.1.1
 azure-common==1.1.28
 azure-core==1.35.0
 azure-mgmt-core==1.6.0
+azure-storage-blob==12.26.0
 beautifulsoup4==4.12.3
 billiard==4.2.1
 celery==5.4.0
 certifi==2024.8.30
+cffi==1.17.1
 charset-normalizer==3.4.0
 ci-info==0.3.0
 click==8.1.7
@@ -18,7 +20,10 @@ click-plugins==1.1.1
 click-repl==0.3.0
 configobj==5.0.9
 configparser==7.1.0
-Django==5.1.1
+cryptography==45.0.6
+dj-database-url==3.0.1
+Django==4.2.23
+django-storages==1.14.6
 et-xmlfile==1.1.0
 etelemetry==0.3.1
 filelock==3.16.1
@@ -43,6 +48,7 @@ pillow==11.3.0
 prompt_toolkit==3.0.48
 prov==2.0.1
 psycopg2-binary==2.9.9
+pycparser==2.22
 pydot==3.0.2
 PyMuPDF==1.24.11
 pyparsing==3.1.4
@@ -65,4 +71,5 @@ tzdata==2024.2
 urllib3==2.2.3
 vine==5.1.0
 wcwidth==0.2.13
+whitenoise==6.9.0
 XlsxWriter==3.2.0
