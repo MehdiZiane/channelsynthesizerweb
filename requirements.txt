@@ -29,7 +29,7 @@ etelemetry==0.3.1
 filelock==3.16.1
 httplib2==0.22.0
 idna==3.10
-importlib-metadata==6.11.0
+importlib_metadata==8.7.0
 importlib_resources==6.5.2
 isodate==0.6.1
 kombu==5.4.2
