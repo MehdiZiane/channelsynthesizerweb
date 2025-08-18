@@ -1,117 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Channel Synthesizer</title>
-    <style>
-        /* Styles pour un thème sombre avec dégradé */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+{% extends "base.html" %}
 
-        body {
-            font-family: 'Roboto', sans-serif;
-            background: linear-gradient(135deg, #6a4c93, #ff6f61, #f5d1b0);
-            background-size: 300% 300%;
-            animation: gradientAnimation 10s ease infinite;
-            color: #e0e0e0;
-            padding: 20px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh; /* Prend toute la hauteur de la fenêtre */
-        }
+{% block title %}Login - Channel Synthesizer{% endblock %}
 
-        @keyframes gradientAnimation {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
+{% block content %}
+<h2 class="title">Connexion</h2>
 
-        .m3-container {
-            width: 100%;
-            max-width: 400px;
-            padding: 20px;
-            background-color: rgba(30, 30, 30, 0.8);
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-        }
+<form method="post">
+    {% csrf_token %}
 
-        .m3-title {
-            font-size: 1.5rem;
-            margin-bottom: 20px;
-            color: #ffcbf2; /* Light pastel color */
-            text-align: center;
-        }
+    <div class="form-card">
+        <div class="form-field">
+            <label for="{{ form.username.id_for_label }}">Nom d'utilisateur</label>
+            {{ form.username }}
+        </div>
 
-        .m3-input-field {
-            margin-bottom: 20px;
-        }
-
-        .m3-input-field label {
-            display: block;
-            margin-bottom: 5px;
-            color: #e0e0e0;
-        }
-
-        .m3-input-field input {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #333;
-            border-radius: 8px;
-            font-size: 1rem;
-            background-color: #2c2c2c;
-            color: #e0e0e0;
-        }
-
-        .m3-input-field input:focus {
-            border-color: #bb86fc;
-            outline: none;
-            background-color: #3c3c3c;
-        }
-
-        .m3-button {
-            display: block;
-            width: 100%;
-            padding: 12px;
-            background-color: #bb86fc;
-            color: #121212;
-            border: none;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-
-        .m3-button:hover {
-            background-color: #985eff; /* Darker shade for hover effect */
-        }
-
-        .m3-center-align {
-            text-align: center;
-        }
-    </style>
-</head>
-<body>
-    <div class="m3-container">
-        <h3 class="m3-title">Login - Channel Synthesizer</h3>
-        <form method="post">
-            {% csrf_token %}
-            <div class="m3-input-field">
-                {{ form.username.label_tag }}
-                {{ form.username }}
-            </div>
-            <div class="m3-input-field">
-                {{ form.password.label_tag }}
-                {{ form.password }}
-            </div>
-            <div class="m3-center-align">
-                <button class="m3-button" type="submit">Login</button>
-            </div>
-        </form>
+        <div class="form-field">
+            <label for="{{ form.password.id_for_label }}">Mot de passe</label>
+            {{ form.password }}
+        </div>
     </div>
-</body>
-</html>
+
+    <button class="btn" type="submit">Se connecter</button>
+</form>
+{% endblock %}
