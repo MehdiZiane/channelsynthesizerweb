@@ -1,80 +1,136 @@
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Analyse de Canaux{% endblock %}
+{% block title %}Nouvelle Analyse{% endblock %}
 
 {% block content %}
 <h2 class="title">Channel Synthesizer</h2>
-<form method="post" action="{% url 'logout' %}">
-    {% csrf_token %}
-    <button class="btn logout-btn" type="submit">Déconnexion</button>
-</form>
+<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn logout-btn"
+        type="submit">Déconnexion</button></form>
 
-<form method="post" enctype="multipart/form-data" id="main-form">
+<form method="post" enctype="multipart/form-data">
     {% csrf_token %}
 
-    <div class="form-grid">
-        <div class="form-column">
-            <div class="form-card">
-                <h4>Étape 1 : Fichiers PDF</h4>
-                <div class="tabs">
-                    <button type="button" class="tab-button active" data-tab="pdf-upload">Uploader</button>
-                    <button type="button" class="tab-button" data-tab="pdf-select">Sélectionner</button>
-                </div>
+    {% if form.non_field_errors %}
+    <div class="form-errors">
+        {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+    </div>
+    {% endif %}
 
-                <div id="pdf-upload" class="tab-content active">
-                    <div class="form-field">{{ form.pdf_files }}</div>
-                </div>
-                <div id="pdf-select" class="tab-content">
-                    <div class="scrollable-container">{{ form.existing_pdf_files }}</div>
-                </div>
+    <div class="form-card">
+        <h4>Étape 1 : Choisissez vos sources de données</h4>
+        <div class="provider-selector">
+            <div class="provider-card">
+                {{ form.include_base_offers }}
+                <label for="{{ form.include_base_offers.id_for_label }}">BASE (Site Web)</label>
             </div>
-        </div>
-
-        <div class="form-column">
-            <div class="form-card">
-                <h4>Étape 2 : Fichier Excel</h4>
-                <div class="form-field">{{ form.excel_file }}</div>
-                <div class="form-field">{{ form.existing_excel_file }}</div>
-            </div>
-
-            <div class="form-card">
-                <h4>Étape 3 : Options</h4>
-                <div class="checkbox-field">
-                    {{ form.include_base_offers }}
-                    <label for="{{ form.include_base_offers.id_for_label }}">Activer les offres de l'opérateur
-                        Base</label>
-                </div>
-            </div>
+            <div class="provider-card" data-provider="orange"><label>Orange (PDF)</label></div>
+            <div class="provider-card" data-provider="voo"><label>VOO (PDF)</label></div>
+            <div class="provider-card" data-provider="telenet"><label>Telenet (PDF)</label></div>
         </div>
     </div>
 
-    <div style="margin-top: 20px;">
-        <button class="btn" type="submit">Lancer l'Analyse</button>
+    {% for provider_name, pdf_list in pdfs_by_provider.items %}
+    <div class="form-card provider-details" id="{{ provider_name }}-details" style="display:none;">
+        <h4>Fichiers pour {{ provider_name|title }}</h4>
+        <div class="tabs">
+            <button type="button" class="tab-button active" data-tab="{{ provider_name }}-upload">Uploader</button>
+            <button type="button" class="tab-button" data-tab="{{ provider_name }}-select">Sélectionner</button>
+        </div>
+
+        <div id="{{ provider_name }}-upload" class="tab-content active">
+            <div class="form-field">{{ form.pdf_files }}</div>
+        </div>
+
+        <div id="{{ provider_name }}-select" class="tab-content">
+            <div class="scrollable-container">
+                {% if pdf_list %}
+                <table class="file-table">
+                    <thead>
+                        <tr>
+                            <th>Fichier</th>
+                            <th>Sélectionner</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pdf in pdf_list %}
+                        <tr>
+                            <td>{{ pdf.file.name|cut:"pdfs/" }}<br><small>({{ pdf.uploaded_at|date:"d/m/y H:i"
+                                    }})</small></td>
+                            <td><input type="checkbox" name="existing_pdf_files" value="{{ pdf.id }}"
+                                    id="pdf-{{ pdf.id }}"></td>
+                            <td><button type="button" class="btn-delete" data-file-id="{{ pdf.id }}">Supprimer</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p>Aucun fichier existant pour ce fournisseur.</p>
+                {% endif %}
+            </div>
+        </div>
     </div>
+    {% endfor %}
+
+    <div class="form-card">
+        <h4>Étape 2 : Fichier Excel de référence</h4>
+        <div class="form-field">{{ form.excel_file.label_tag }} {{ form.excel_file }}</div>
+        <hr class="separator">
+        <div class="form-field">{{ form.existing_excel_file.label_tag }} {{ form.existing_excel_file }}</div>
+    </div>
+
+    <div style="margin-top: 20px;"><button class="btn" type="submit">Lancer l'Analyse</button></div>
 </form>
 {% endblock %}
 
 {% block scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // Logique pour les onglets
-        const tabButtons = document.querySelectorAll('.tab-button');
-        tabButtons.forEach(button => {
-            button.addEventListener('click', () => {
+        // Logique pour afficher/cacher les détails d'un fournisseur
+        document.querySelectorAll('.provider-card[data-provider]').forEach(card => {
+            card.addEventListener('click', () => {
+                card.classList.toggle('selected');
+                const providerName = card.getAttribute('data-provider');
+                const detailsSection = document.getElementById(providerName + '-details');
+                if (detailsSection) {
+                    detailsSection.style.display = card.classList.contains('selected') ? 'block' : 'none';
+                }
+            });
+        });
+
+        // Logique pour les onglets (tabs)
+        document.querySelectorAll('.tab-button').forEach(button => {
+            button.addEventListener('click', (event) => {
                 const tabContainer = button.closest('.form-card');
                 const tabName = button.getAttribute('data-tab');
-
                 tabContainer.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
-
                 tabContainer.querySelectorAll('.tab-content').forEach(content => {
-                    if (content.id === tabName) {
-                        content.classList.add('active');
-                    } else {
-                        content.classList.remove('active');
-                    }
+                    content.classList.toggle('active', content.id === tabName);
                 });
+            });
+        });
+
+        // Logique pour la suppression de PDF
+        document.querySelectorAll('.btn-delete').forEach(button => {
+            button.addEventListener('click', function () {
+                const pdfId = this.getAttribute('data-file-id');
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                if (confirm('Êtes-vous sûr de vouloir supprimer ce fichier PDF ?')) {
+                    fetch("{% url 'delete_pdf' %}", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+                        body: 'pdf_id=' + encodeURIComponent(pdfId),
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) { window.location.reload(); }
+                            else { alert('Erreur : ' + data.error); }
+                        })
+                        .catch(error => alert('Erreur : ' + error));
+                }
             });
         });
     });

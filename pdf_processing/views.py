@@ -1,6 +1,6 @@
 import shutil
 from django.shortcuts import render, redirect, get_object_or_404
-from .forms import UploadFilesForm
+from .forms import AnalysisForm
 from .models import UploadedPDF, UploadedExcel, ProcessingBatch
 from .processing import process_uploaded_pdfs
 import os
@@ -16,70 +16,59 @@ from image_processing.services import analyze_pdf_images
 @login_required
 def upload_files(request):
     if request.method == "POST":
-        form = UploadFilesForm(request.POST, request.FILES)
+        form = AnalysisForm(request.POST, request.FILES)
         if form.is_valid():
-            # Récupérer la valeur de la case à cocher
+            # Récupérer les choix de l'utilisateur
             include_base_offers = form.cleaned_data.get("include_base_offers", False)
 
-            # Créer un nouveau batch de traitement
-            batch = ProcessingBatch.objects.create()
-
-            pdf_files = request.FILES.getlist("pdf_files")
-            existing_pdf_files = form.cleaned_data.get("existing_pdf_files")
-            excel_file = request.FILES.get("excel_file")
-            existing_excel_file = form.cleaned_data.get("existing_excel_file")
-
-            pdf_instances = []
-
-            # Enregistrer les nouveaux fichiers PDF uploadés
-            for pdf_file in pdf_files:
-                pdf_instance = UploadedPDF(file=pdf_file, batch=batch)
-                pdf_instance.save()
-                pdf_instances.append(pdf_instance)
-
-            # Ajouter les fichiers PDF existants au batch
-            if existing_pdf_files:
-                for pdf_instance in existing_pdf_files:
-                    pdf_instance.batch = batch
-                    pdf_instance.save()
-                    pdf_instances.append(pdf_instance)
+            # Récupérer les fichiers PDF (nouveaux et existants)
+            pdf_instances_to_process = list(
+                form.cleaned_data.get("existing_pdf_files", [])
+            )
+            for pdf_file in request.FILES.getlist("pdf_files"):
+                pdf_instance = UploadedPDF.objects.create(file=pdf_file)
+                pdf_instances_to_process.append(pdf_instance)
 
             # Gérer le fichier Excel
+            excel_file = form.cleaned_data.get("excel_file")
+            existing_excel_file = form.cleaned_data.get("existing_excel_file")
+
+            excel_instance = existing_excel_file
             if excel_file:
-                # Enregistrer le nouveau fichier Excel
-                excel_instance = UploadedExcel(file=excel_file)
-                excel_instance.save()
-                # Associer le fichier Excel au batch
-                batch.excel_file = excel_instance
-                batch.save()
-                excel_file_path = excel_instance.file.path
-            elif existing_excel_file:
-                # Utiliser le fichier Excel existant
-                batch.excel_file = existing_excel_file
-                batch.save()
-                excel_file_path = existing_excel_file.file.path
-            else:
-                # Cela ne devrait pas arriver en raison de la validation du formulaire
-                raise ValueError("Aucun fichier Excel fourni.")
+                excel_instance = UploadedExcel.objects.create(file=excel_file)
 
-            # On lance l'analyse d'images pour chaque PDF du batch
-            print("--- Lancement de l'analyse d'images pour le batch ---")
-            for pdf in pdf_instances:
-                try:
-                    analyze_pdf_images(pdf)
-                except Exception as e:
-                    print(
-                        f"Une erreur majeure est survenue lors de l'analyse d'images pour {pdf.file.name}: {e}"
-                    )
-            print("--- Analyse d'images terminée pour le batch. ---")
+            if not excel_instance:
+                # Normalement impossible grâce à la validation, mais c'est une sécurité
+                form.add_error(None, "Un fichier Excel de référence est requis.")
+                return render(
+                    request, "pdf_processing/upload_files.html", {"form": form}
+                )
 
-            # Traiter les fichiers
-            process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers)
+            # Lancer le traitement principal
+            process_uploaded_pdfs(
+                pdf_instances_to_process, excel_instance.file.path, include_base_offers
+            )
 
             return redirect("download_report")
     else:
-        form = UploadFilesForm()
-    return render(request, "pdf_processing/upload_files.html", {"form": form})
+        form = AnalysisForm()
+
+    # --- Logique pour préparer l'affichage ---
+    # On récupère tous les PDF et on les groupe par fournisseur pour l'affichage
+    existing_pdfs = UploadedPDF.objects.order_by("-uploaded_at")
+    pdfs_by_provider = {"orange": [], "voo": [], "telenet": []}
+
+    for pdf in existing_pdfs:
+        filename_lower = os.path.basename(pdf.file.name).lower()
+        if "orange" in filename_lower:
+            pdfs_by_provider["orange"].append(pdf)
+        elif "voo" in filename_lower:
+            pdfs_by_provider["voo"].append(pdf)
+        elif "telenet" in filename_lower:
+            pdfs_by_provider["telenet"].append(pdf)
+
+    context = {"form": form, "pdfs_by_provider": pdfs_by_provider}
+    return render(request, "pdf_processing/upload_files.html", context)
 
 
 def handle_excel_upload(excel_file, batch_id):
