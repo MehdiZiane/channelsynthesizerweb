@@ -20,4 +20,7 @@ db.sqlite3
 /test_files/
 
 # Fichiers système macOS
+
 .DS_Store
+
+.github/workflows
