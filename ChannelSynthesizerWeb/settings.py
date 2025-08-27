@@ -98,11 +98,26 @@ TEMPLATES = [
 # dans la variable d'environnement DATABASE_URL (sur Azure) ou utilise
 # les variables locales (dans .env) par défaut.
 # ==============================================================================
-DATABASES = {
-    "default": dj_database_url.config(
-        default=f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}@{config('DB_HOST')}:{config('DB_PORT')}/{config('DB_NAME')}"
-    )
-}
+# On vérifie si les variables du Service Connector existent (signe qu'on est sur Azure)
+if "AZURE_POSTGRESQL_HOST" in os.environ:
+    # Configuration pour Azure via le Service Connector
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("AZURE_POSTGRESQL_DATABASE"),
+            "USER": os.environ.get("AZURE_POSTGRESQL_USER"),
+            "PASSWORD": os.environ.get("AZURE_POSTGRESQL_PASSWORD"),
+            "HOST": os.environ.get("AZURE_POSTGRESQL_HOST"),
+            "PORT": os.environ.get("AZURE_POSTGRESQL_PORT"),
+        }
+    }
+else:
+    # Configuration pour le développement local via le fichier .env
+    DATABASES = {
+        "default": dj_database_url.config(
+            default=f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}@{config('DB_HOST')}:{config('DB_PORT')}/{config('DB_NAME')}"
+        )
+    }
 
 
 # ==============================================================================
