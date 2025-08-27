@@ -66,3 +66,7 @@ urllib3==2.2.3
 vine==5.1.0
 wcwidth==0.2.13
 XlsxWriter==3.2.0
+gunicorn
+dj-database-url
+whitenoise
+python-decouple

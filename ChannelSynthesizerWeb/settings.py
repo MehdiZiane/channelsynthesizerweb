@@ -10,38 +10,39 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-from pathlib import Path
 import os
+from decouple import config
+import dj_database_url
 
+# --> AJOUTEZ CETTE LIGNE POUR LE TEST <--
 print(
-    "\n\n✅✅✅ SUCCÈS : Le code de la BRANCHE TEST2 est bien en cours d'exécution ! ✅✅✅\n\n"
+    f"--- TEST DE DEBUG --- La valeur de DB_NAME lue est : '{config('DB_NAME', default='!!! NON TROUVÉ !!!')}'"
 )
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-MEDIA_URL = "/media/"
-MEDIA_ROOT = os.path.join(BASE_DIR, "media/")
+# ==============================================================================
+# CONFIGURATION DE SÉCURITÉ ET DE L'ENVIRONNEMENT
+# Ces valeurs sont chargées depuis votre fichier .env en local,
+# et depuis les "Application Settings" sur Azure.
+# ==============================================================================
+SECRET_KEY = config("SECRET_KEY")
+DEBUG = config("DEBUG", default=False, cast=bool)
+
+# Clés pour les services Azure AI
+VISION_ENDPOINT = config("VISION_ENDPOINT", default="")
+VISION_KEY = config("VISION_KEY", default="")
+
+# Hôte autorisé. Sur Azure, la variable 'WEBSITE_HOSTNAME' est fournie automatiquement.
+ALLOWED_HOSTS = [config("WEBSITE_HOSTNAME", default="127.0.0.1")]
 
 
-LOGIN_REDIRECT_URL = "/upload/"
-LOGOUT_REDIRECT_URL = "/login/"
-LOGIN_URL = "/login/"
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-t+01!urh+6^!^wv9@h(w)*+v^rrl8#9mhvke_@y8vv6*2hsf43"
-
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-
-ALLOWED_HOSTS = []
-
+# ==============================================================================
+# GESTION DES APPLICATIONS ET DES URLS
+# ==============================================================================
 
 # Application definition
-
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -57,6 +58,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Middleware WhiteNoise pour servir les fichiers statiques en production
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -66,7 +69,12 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "ChannelSynthesizerWeb.urls"
+WSGI_APPLICATION = "ChannelSynthesizerWeb.wsgi.application"
 
+
+# ==============================================================================
+# CONFIGURATION DES TEMPLATES
+# ==============================================================================
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -83,69 +91,69 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "ChannelSynthesizerWeb.wsgi.application"
 
-
-# Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
+# ==============================================================================
+# CONFIGURATION DE LA BASE DE DONNÉES
+# Utilise dj-database-url pour se connecter à la base de données définie
+# dans la variable d'environnement DATABASE_URL (sur Azure) ou utilise
+# les variables locales (dans .env) par défaut.
+# ==============================================================================
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": "channel_db",
-        "USER": "mehlo",
-        "PASSWORD": "Password1234",
-        "HOST": "localhost",
-        "PORT": "5432",
-    }
+    "default": dj_database_url.config(
+        default=f"postgresql://{config('DB_USER')}:{config('DB_PASSWORD')}@{config('DB_HOST')}:{config('DB_PORT')}/{config('DB_NAME')}"
+    )
 }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
-
+# ==============================================================================
+# VALIDATION DES MOTS DE PASSE
+# ==============================================================================
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
     },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
-    },
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/5.1/topics/i18n/
-
+# ==============================================================================
+# INTERNATIONALIZATION
+# ==============================================================================
 LANGUAGE_CODE = "en-us"
-
 TIME_ZONE = "UTC"
-
 USE_I18N = True
-
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.1/howto/static-files/
-
+# ==============================================================================
+# FICHIERS STATIQUES (CSS, JS, Images du site)
+# WhiteNoise se chargera de servir les fichiers collectés dans STATIC_ROOT.
+# ==============================================================================
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+
+# ==============================================================================
+# FICHIERS MEDIA (Fichiers uploadés par les utilisateurs)
+# ATTENTION : En production sur Azure, le stockage local est temporaire.
+# Pour une solution fiable, il faudra configurer Azure Blob Storage ici.
+# ==============================================================================
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media/")
 
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
+# ==============================================================================
+# CONFIGURATION DE L'AUTHENTIFICATION
+# ==============================================================================
+LOGIN_REDIRECT_URL = "/upload/"
+LOGOUT_REDIRECT_URL = "/login/"
+LOGIN_URL = "/login/"
 
+
+# ==============================================================================
+# CONFIGURATION DU MODÈLE PAR DÉFAUT
+# ==============================================================================
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
-# Tout à la fin de settings.py
-
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, "static"),
-]
