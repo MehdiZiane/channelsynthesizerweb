@@ -65,8 +65,8 @@ urllib3==2.2.3
 vine==5.1.0
 wcwidth==0.2.13
 XlsxWriter==3.2.0
-gunicorn
+gunicorn==22.0.0
 dj-database-url
 whitenoise
 python-decouple
-importlib-metadata
+importlib-metadata==7.1.0
