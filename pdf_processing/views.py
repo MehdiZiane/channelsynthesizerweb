@@ -13,36 +13,53 @@ from django.middleware.csrf import get_token
 from image_processing.services import analyze_pdf_images
 
 
+# Dans pdf_processing/views.py (pour online_branch)
+
+
 @login_required
 def upload_files(request):
     if request.method == "POST":
         form = AnalysisForm(request.POST, request.FILES)
         if form.is_valid():
-            # Récupérer les choix de l'utilisateur
             include_base_offers = form.cleaned_data.get("include_base_offers", False)
 
-            # Récupérer les fichiers PDF (nouveaux et existants)
-            pdf_instances_to_process = list(
-                form.cleaned_data.get("existing_pdf_files", [])
-            )
-            for pdf_file in request.FILES.getlist("pdf_files"):
-                pdf_instance = UploadedPDF.objects.create(file=pdf_file)
-                pdf_instances_to_process.append(pdf_instance)
+            # --- CORRECTION ÉTAPE 1 : CRÉER UN NOUVEAU BATCH ---
+            batch = ProcessingBatch.objects.create()
 
-            # Gérer le fichier Excel
+            # --- CORRECTION ÉTAPE 2 : GÉRER L'EXCEL ET L'ASSOCIER AU BATCH ---
             excel_file = form.cleaned_data.get("excel_file")
             existing_excel_file = form.cleaned_data.get("existing_excel_file")
-
             excel_instance = existing_excel_file
             if excel_file:
                 excel_instance = UploadedExcel.objects.create(file=excel_file)
 
-            if not excel_instance:
-                # Normalement impossible grâce à la validation, mais c'est une sécurité
+            if excel_instance:
+                batch.excel_file = excel_instance
+                batch.save()
+            else:
                 form.add_error(None, "Un fichier Excel de référence est requis.")
-                return render(
-                    request, "pdf_processing/upload_files.html", {"form": form}
-                )
+                # Le reste de la gestion d'erreur reste pareil...
+                existing_pdfs = UploadedPDF.objects.order_by("-uploaded_at")
+                pdfs_by_provider = {"orange": [], "voo": [], "telenet": []}
+                for pdf in existing_pdfs:
+                    filename_lower = os.path.basename(pdf.file.name).lower()
+                    if "orange" in filename_lower:
+                        pdfs_by_provider["orange"].append(pdf)
+                    elif "voo" in filename_lower:
+                        pdfs_by_provider["voo"].append(pdf)
+                    elif "telenet" in filename_lower:
+                        pdfs_by_provider["telenet"].append(pdf)
+                context = {"form": form, "pdfs_by_provider": pdfs_by_provider}
+                return render(request, "pdf_processing/upload_files.html", context)
+
+            # --- CORRECTION ÉTAPE 3 : CRÉER LES PDF EN LES LIANT AU BATCH ---
+            pdf_instances_to_process = list(
+                form.cleaned_data.get("existing_pdf_files", [])
+            )
+            for pdf_file in request.FILES.getlist("pdf_files"):
+                # On fournit le `batch` lors de la création du PDF
+                pdf_instance = UploadedPDF.objects.create(file=pdf_file, batch=batch)
+                pdf_instances_to_process.append(pdf_instance)
 
             # Lancer le traitement principal
             process_uploaded_pdfs(
@@ -53,11 +70,9 @@ def upload_files(request):
     else:
         form = AnalysisForm()
 
-    # --- Logique pour préparer l'affichage ---
-    # On récupère tous les PDF et on les groupe par fournisseur pour l'affichage
+    # La logique pour préparer l'affichage reste la même
     existing_pdfs = UploadedPDF.objects.order_by("-uploaded_at")
     pdfs_by_provider = {"orange": [], "voo": [], "telenet": []}
-
     for pdf in existing_pdfs:
         filename_lower = os.path.basename(pdf.file.name).lower()
         if "orange" in filename_lower:
