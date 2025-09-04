@@ -49,8 +49,15 @@ def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=Fa
                 pdf_path, provider
             )  # Appel à sections.py
             if channels_from_pdf:
+                print(
+                    f"DEBUG: SUCCÈS - {len(channels_from_pdf)} sections trouvées dans {os.path.basename(pdf_path)}"
+                )
                 all_extracted_data.append(
                     {"path": pdf_path, "channels": channels_from_pdf}
+                )
+            else:
+                print(
+                    f"DEBUG: ÉCHEC - Aucune section retournée par process_sections pour {os.path.basename(pdf_path)}"
                 )
 
         if all_extracted_data:
@@ -61,6 +68,7 @@ def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=Fa
 
     # --- DÉBUT DE LA LOGIQUE BASE RÉINTÉGRÉE ---
     if include_base_offers:
+        print("DEBUG: Début du scraping des offres BASE.")
         print("Scraping des offres BASE et ajout au rapport...")
         base_url = "https://www.prd.base.be/en/support/tv/your-base-tv-box-and-remote/what-channels-does-base-offer/"
         try:
@@ -101,12 +109,13 @@ def process_uploaded_pdfs(pdf_instances, excel_file_path, include_base_offers=Fa
                 )
 
         except Exception as e:
+            print(f"DEBUG: ERREUR CRITIQUE DANS LE SCRAPING BASE : {e}")
             error_message = f"Erreur lors du scraping des offres BASE : {e}"
             print(error_message)
             if os.path.exists(final_report_path):
                 add_error_to_report(final_report_path, error_message)
     # --- FIN DE LA LOGIQUE BASE RÉINTÉGRÉE ---
-
+    print("DEBUG: Fin de la fonction process_uploaded_pdfs.")
     return final_report_path
 
 
