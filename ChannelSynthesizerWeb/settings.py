@@ -172,3 +172,6 @@ LOGIN_URL = "/login/"
 # CONFIGURATION DU MODÈLE PAR DÉFAUT
 # ==============================================================================
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+VISION_ENDPOINT = config("VISION_ENDPOINT", default="")
+VISION_KEY = config("VISION_KEY", default="")

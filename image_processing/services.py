@@ -8,6 +8,7 @@ from django.core.files.base import ContentFile
 from azure.core.credentials import AzureKeyCredential
 from azure.ai.vision.imageanalysis import ImageAnalysisClient
 from azure.ai.vision.imageanalysis.models import VisualFeatures
+from django.conf import settings
 
 from .models import ProcessedImage, ImageAnalysis
 
@@ -15,6 +16,9 @@ from .models import ProcessedImage, ImageAnalysis
 load_dotenv()
 VISION_ENDPOINT = os.getenv("VISION_ENDPOINT")
 VISION_KEY = os.getenv("VISION_KEY")
+
+VISION_ENDPOINT = settings.VISION_ENDPOINT
+VISION_KEY = settings.VISION_KEY
 
 
 def analyze_pdf_images(uploaded_pdf_instance):
